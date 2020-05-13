@@ -17,9 +17,22 @@ SimplexBase<Dim, SimplexDim>::SimplexBase(MeshBase *mesh, ID id, const array<ID,
 {}
 
 template<uint Dim, uint SimplexDim>
+SimplexBase<Dim, SimplexDim>::SimplexBase(MeshBase *mesh, ID id, const util::generate_tuple_type_t<ID, SimplexDim + 1>& vertices)
+        : mesh(mesh), id(id), vertices(util::as_array<util::generate_tuple_type_t<ID, SimplexDim + 1>>(
+        std::forward<util::generate_tuple_type_t<ID, SimplexDim + 1>>(
+                const_cast<util::generate_tuple_type_t<ID, SimplexDim + 1>&>(vertices))))
+{}
+
+template<uint Dim, uint SimplexDim>
 ID SimplexBase<Dim, SimplexDim>::getID() const noexcept
 {
    return id;
+}
+
+template<uint Dim, uint SimplexDim>
+uint SimplexBase<Dim, SimplexDim>::getTopologyDimension() const noexcept
+{
+   return SimplexDim;
 }
 
 template<uint Dim, uint SimplexDim>
@@ -37,6 +50,12 @@ template<uint Dim, uint SimplexDim>
 size_t SimplexBase<Dim, SimplexDim>::getNumVertices() const noexcept
 {
    return SimplexDim + 1;
+}
+
+template<uint Dim, uint SimplexDim>
+util::generate_tuple_type_t<ID, SimplexDim + 1> SimplexBase<Dim, SimplexDim>::getVertices() const
+{
+   return util::as_tuple<ID, SimplexDim + 1>(vertices);
 }
 
 template<uint Dim, uint SimplexDim>

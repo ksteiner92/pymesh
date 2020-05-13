@@ -99,7 +99,7 @@ static void declareSegment(py::module &m)
       ss << Dim << TopDim << 'D';
    PyClass cls(m, ss.str().c_str());
    cls.def_property_readonly("id", &Class::getID);
-   cls.def_property_readonly("mesh", &Class::mesh, rvp::reference_internal);
+   cls.def_property_readonly("mesh", py::overload_cast<>(&Class::mesh), rvp::reference_internal);
 }
 
 template<uint Dim, uint TopDim>
@@ -116,7 +116,7 @@ static void declareInterface(py::module &m)
       ss << Dim << TopDim << 'D';
    PyClass cls(m, ss.str().c_str());
    cls.def_property_readonly("id", &Class::getID);
-   cls.def_property_readonly("mesh", &Class::mesh, rvp::reference_internal);
+   cls.def_property_readonly("mesh", py::overload_cast<>(&Class::mesh), rvp::reference_internal);
 }
 
 template<uint Dim, uint TopDim>
@@ -135,7 +135,7 @@ static void declareSystem(py::module &m)
    PyClassSystem cls_system(m, system_ss.str().c_str());
    cls_system.def("segment", py::overload_cast<const string&>(&SystemClass::segment), rvp::reference_internal);
    cls_system.def("segment", py::overload_cast<ID>(&SystemClass::segment), rvp::reference_internal);
-   cls_system.def_property_readonly("mesh", &SystemClass::mesh, rvp::reference_internal);
+   cls_system.def_property_readonly("mesh", py::overload_cast<>(&SystemClass::mesh, py::const_), rvp::reference_internal);
    cls_system.def_property_readonly("voronoi", &SystemClass::voronoi, rvp::reference_internal);
    cls_system.def("interface", py::overload_cast<const string&, const string&>(&SystemClass::interface), rvp::reference_internal);
    cls_system.def("interface", py::overload_cast<ID, ID>(&SystemClass::interface), rvp::reference_internal);
@@ -151,7 +151,7 @@ static void declareSystem(py::module &m)
    cls_systemfactory.def(py::init<>());
    cls_systemfactory.def_property_readonly("mesh", &System<Dim, TopDim>::Factory::mesh, rvp::reference_internal);
    cls_systemfactory.def("segment", &System<Dim, TopDim>::Factory::segment, rvp::reference_internal);
-   cls_systemfactory.def("create", &System<Dim, TopDim>::Factory::create, rvp::move);
+   cls_systemfactory.def("create", &System<Dim, TopDim>::Factory::create, "area"_a = 0.0, rvp::move);
 }
 
 PYBIND11_MODULE(pymesh, m) {

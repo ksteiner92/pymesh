@@ -1,8 +1,8 @@
-add_library(mesh SHARED mesh.cc segment.cc elements.cc system.cc ../io/logger.cc)
+add_library(mesh SHARED mesh.cc segment.cc elements.cc system.cc meshing.cc ../io/logger.cc)
 
 find_package(Eigen3 REQUIRED)
 
-target_compile_features(mesh PRIVATE cxx_std_14)
+target_compile_features(mesh PRIVATE cxx_std_17)
 
 add_subdirectory(tetgen)
 add_subdirectory(triangle)

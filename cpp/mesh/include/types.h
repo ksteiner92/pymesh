@@ -9,7 +9,7 @@
 
 typedef unsigned long long int ullong;
 
-typedef int ID;
+typedef long ID;
 
 using EigenDStride = Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>;
 template<typename MatrixType> using EigenDRef = Eigen::Ref<MatrixType, 0, EigenDStride>;

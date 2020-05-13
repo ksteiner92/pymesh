@@ -13,16 +13,127 @@
 #include <algorithm>
 #include <sstream>
 
-#include "attributes.h"
 #include "eigen.h"
+#include "hash.hh"
 #include "utils.hh"
 #include "elements.h"
+#include "simplexcontainer.hh"
 
 namespace mesh
 {
 
 template<uint Dim, uint TopDim>
 class System;
+
+class ConstMeshElementsProxy
+{
+public:
+   class ConstIterator
+   {
+   public:
+      using iterator_category = std::forward_iterator_tag;
+      using value_type = MeshElement;
+      using difference_type = MeshElement;
+      using pointer = const MeshElement*;
+      using reference = const MeshElement&;
+
+      ConstIterator(ConstMeshElementsProxy* container, std::size_t pos) : container(container), pos(pos)
+      {}
+
+      //We have a forward iterator which requires a default constructor
+      ConstIterator() = default;
+
+      ~ConstIterator() = default;
+
+      ConstIterator operator++()
+      {
+         ConstIterator i = *this;
+         pos++;
+         return i;
+      }
+
+      const ConstIterator operator++(int)
+      {
+         pos++;
+         return *this;
+      }
+
+      reference operator*()
+      {
+         return *(*container)[pos];
+      }
+
+      pointer operator->()
+      {
+         return (*container)[pos];
+      }
+
+      bool operator==(const ConstIterator& rhs) const noexcept
+      {
+         return container == rhs.container && pos == rhs.pos;
+      }
+
+      bool operator!=(const ConstIterator& rhs) const noexcept
+      {
+         return !operator==(rhs);
+      }
+
+   private:
+      std::size_t pos;
+      ConstMeshElementsProxy* container;
+   };
+
+   explicit ConstMeshElementsProxy(std::vector<std::unique_ptr<MeshElement>>* elements, std::vector<ID>* ref = nullptr)
+   : elements(elements), ref(ref)
+   {}
+
+   ConstMeshElementsProxy() = delete;
+
+   virtual ~ConstMeshElementsProxy() = default;
+
+   ConstMeshElementsProxy(const ConstMeshElementsProxy&) = default;
+
+   ConstMeshElementsProxy& operator=(const ConstMeshElementsProxy&) = default;
+
+   ConstMeshElementsProxy(ConstMeshElementsProxy&&) noexcept = default;
+
+   ConstMeshElementsProxy& operator=(ConstMeshElementsProxy&&) noexcept = default;
+
+   const MeshElement* operator[](size_t idx) const
+   {
+      if (ref == nullptr) {
+         if (idx >= elements->size())
+            throw std::out_of_range("Index out of range");
+         return (*elements)[idx].get();
+      }
+      if (idx >= ref->size())
+         throw std::out_of_range("Index out of range");
+      return (*elements)[(*ref)[idx]].get();
+   }
+
+   ConstIterator begin()
+   {
+      return ConstIterator(this, 0);
+   }
+
+   ConstIterator end()
+   {
+      if (ref == nullptr)
+         return ConstIterator(this, elements->size());
+      return ConstIterator(this, ref->size());
+   }
+
+   [[nodiscard]]
+   std::size_t size() const noexcept
+   {
+      if (ref == nullptr)
+         return elements->size();
+      return ref->size();
+   }
+protected:
+   std::vector<std::unique_ptr<MeshElement>>* elements;
+   std::vector<ID>* ref;
+};
 
 class MeshElementsProxy
 {
@@ -51,7 +162,7 @@ public:
          return i;
       }
 
-      iterator operator++(int)
+      const iterator operator++(int)
       {
          pos++;
          return *this;
@@ -82,11 +193,9 @@ public:
       MeshElementsProxy* container;
    };
 
-   explicit MeshElementsProxy(std::vector<std::unique_ptr<MeshElement>>* elements, std::vector<ID>* ref = nullptr)
-           : elements(elements), ref(ref)
-   {
-      mask.resize(size(), true);
-   }
+   explicit MeshElementsProxy(SimplexContainerBase& elements)
+           : elements(elements)
+   {}
 
    MeshElementsProxy() = delete;
 
@@ -102,14 +211,9 @@ public:
 
    MeshElement* operator[](size_t idx) const
    {
-      if (ref == nullptr) {
-         if (idx >= elements->size())
-            throw std::out_of_range("Index out of range");
-         return (*elements)[idx].get();
-      }
-      if (idx >= ref->size())
+      if (idx >= elements.size())
          throw std::out_of_range("Index out of range");
-      return (*elements)[(*ref)[idx]].get();
+      return elements[idx];
    }
 
    iterator begin()
@@ -119,16 +223,13 @@ public:
 
    iterator end()
    {
-      if (ref == nullptr)
-         return iterator(this, elements->size());
-      return iterator(this, ref->size());
+      return iterator(this, elements.size());
    }
 
+   [[nodiscard]]
    std::size_t size() const noexcept
    {
-      if (ref == nullptr)
-         return elements->size();
-      return ref->size();
+      return elements.size();
    }
 
    virtual MeshElement* create(const std::vector<ID>& vertices) = 0;
@@ -136,8 +237,10 @@ public:
    MeshElementsProxy& add(const EigenDRef<const MatrixXid>& indices)
    {
       for (size_t irow = 0; irow < indices.rows(); ++irow) {
-         const ID* data = indices.row(irow).data();
-         create(std::vector<ID>(data, data + indices.cols()));
+         std::vector<ID> data;
+         data.reserve(indices.cols());
+         for (std::size_t i = 0; i < indices.cols(); ++i) data.push_back(indices.row(irow)[i]);
+         create(data);
       }
       return *this;
    }
@@ -163,14 +266,13 @@ public:
    }
 
 protected:
-   Mask mask;
-   std::vector<std::unique_ptr<MeshElement>>* elements;
-   std::vector<ID>* ref;
+   SimplexContainerBase& elements;
 };
 
 class MeshBase
 {
 public:
+   [[nodiscard]]
    virtual std::vector<double>& getPointList() const = 0;
 
    virtual MeshElementsProxy& bodies()
@@ -196,8 +298,7 @@ public:
 
 template<uint Dim, uint TopDim = Dim>
 class Mesh
-{
-};
+{};
 
 template<uint Dim>
 class Mesh<Dim, 0> : public MeshBase
@@ -224,23 +325,24 @@ public:
 
    Mesh();
 
+   template<uint TopDim>
+   explicit Mesh(Mesh<Dim, TopDim>* mesh);
+
    Mesh(Mesh&) = delete;
 
    Mesh(const Mesh&) = delete;
 
-   Mesh& operator=(Mesh& seg) = delete;
-
-   Mesh& operator=(const Mesh& seg) = delete;
+   virtual ~Mesh() = default;
 
    Mesh(Mesh&& mesh) noexcept = default;
 
-   Mesh& operator=(Mesh&& seg) noexcept = default;
+   Mesh& operator=(Mesh&) = delete;
 
-   template<uint TopDim>
-   explicit Mesh(Mesh<Dim, TopDim>* mesh);
+   Mesh& operator=(const Mesh&) = delete;
 
-   inline bool ownsElements() const noexcept;
+   Mesh& operator=(Mesh&&) noexcept = default;
 
+   [[nodiscard]]
    std::vector<double>& getPointList() const override;
 
    MeshElementsProxy& bodies() override;
@@ -248,23 +350,11 @@ public:
    VerticesProxy& vertices();
 
 protected:
-   void setCoordinates(const std::vector<double>& coordinates);
-
-   void setCoordinates(const double* coordinates, size_t npts);
-
-   MeshElement* insertVertex(ID vid, bool check=true);
-
    // Coordinates
    std::unique_ptr<std::vector<double>> coordinates_owner;
    std::vector<double>* coordinates;
 
-   //Referenced elements
-   std::vector<ID> refvertices;
-
-   //Elements
-   std::unique_ptr<std::vector<std::unique_ptr<MeshElement>>> vertices_owner;
-   std::vector<std::unique_ptr<MeshElement>>* vertices_;
-
+   SimplexContainer<Dim, 0> vertices_container;
    std::unique_ptr<VerticesProxy> vertices_proxy;
 };
 
@@ -318,24 +408,15 @@ public:
    MeshElementsProxy& edges();
 
 protected:
-   MeshElement* insertEdge(ID vid1, ID vid2, ID eid, bool check=true);
-
-   //Referenced elements
-   std::vector<ID> refedges;
-
-   SimplexHash<1> hash;
-
-   // Elements
-   std::unique_ptr<std::vector<std::unique_ptr<MeshElement>>> edges_owner;
-   std::vector<std::unique_ptr<MeshElement>>* edges_;
+   SimplexContainer<Dim, 1> edges_container;
+   std::unique_ptr<EdgesProxy> edges_proxy;
 
    // Neighbor relations
-   std::unique_ptr<std::unordered_map<ullong, ID>> vhash2eid_owner;
-   std::unordered_map<ullong, ID>* vhash2eid;
-   std::unique_ptr<std::unordered_multimap<ID, Edge<Dim>*>> vertex2edge_owner;
-   std::unordered_multimap<ID, Edge<Dim>*>* vertex2edge;
+   //std::unique_ptr<std::unordered_map<std::array<ID, 2>, ID, ArrayHash<ID, 2>, ArrayNonAssociativeEqual<ID, 2>>> vhash2eid_owner;
+   //std::unordered_map<std::array<ID, 2>, ID, ArrayHash<ID, 2>, ArrayNonAssociativeEqual<ID, 2>>* vhash2eid;
+   //std::unique_ptr<std::unordered_multimap<ID, Edge<Dim>*>> vertex2edge_owner;
+   //std::unordered_multimap<ID, Edge<Dim>*>* vertex2edge;
 
-   std::unique_ptr<EdgesProxy> edges_proxy;
 };
 
 template<uint Dim>
@@ -386,26 +467,17 @@ public:
    FacesProxy& faces();
 
 protected:
-   MeshElement* insertFace(ID vid1, ID vid2, ID vid3, ID fid, bool check=true);
-
-   // Referenced elements
-   std::vector<ID> reffaces;
-
-   SimplexHash<2> hash;
-
-   // Elements
-   std::unique_ptr<std::vector<std::unique_ptr<MeshElement>>> faces_owner;
-   std::vector<std::unique_ptr<MeshElement>>* faces_;
+   SimplexContainer<Dim, 2> faces_container;
+   std::unique_ptr<FacesProxy> faces_proxy;
 
    // Neighbor relations
-   std::unique_ptr<std::unordered_map<ullong, ID>> vhash2fid_owner;
-   std::unordered_map<ullong, ID>* vhash2fid;
-   std::unique_ptr<std::unordered_multimap<ID, Face<Dim>*>> vertex2face_owner;
-   std::unordered_multimap<ID, Face<Dim>*>* vertex2face;
-   std::unique_ptr<std::unordered_multimap<ID, Face<Dim>*>> edge2face_owner;
-   std::unordered_multimap<ID, Face<Dim>*>* edge2face;
+   //std::unique_ptr<std::unordered_map<std::array<ID, 3>, ID, ArrayHash<ID, 3>, ArrayNonAssociativeEqual<ID, 3>>> vhash2fid_owner;
+   //std::unordered_map<std::array<ID, 3>, ID, ArrayHash<ID, 3>, ArrayNonAssociativeEqual<ID, 3>>* vhash2fid;
+   //std::unique_ptr<std::unordered_multimap<ID, Face<Dim>*>> vertex2face_owner;
+   //std::unordered_multimap<ID, Face<Dim>*>* vertex2face;
+   //std::unique_ptr<std::unordered_multimap<ID, Face<Dim>*>> edge2face_owner;
+   //std::unordered_multimap<ID, Face<Dim>*>* edge2face;
 
-   std::unique_ptr<FacesProxy> faces_proxy;
 };
 
 template<>

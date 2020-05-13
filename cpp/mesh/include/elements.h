@@ -6,6 +6,7 @@
 #define PYULB_ELEMENTS_H
 
 #include "types.h"
+#include "utils.hh"
 
 namespace mesh
 {
@@ -18,6 +19,8 @@ public:
    virtual std::size_t getNumVertices() const noexcept = 0;
 
    virtual ID getID() const noexcept = 0;
+
+   virtual uint getTopologyDimension() const noexcept = 0;
 
    virtual ID operator[](std::size_t idx) const = 0;
 
@@ -42,6 +45,8 @@ public:
 
    SimplexBase(MeshBase *mesh, ID id, const std::array<ID, SimplexDim + 1>& vertices);
 
+   SimplexBase(MeshBase *mesh, ID id, const util::generate_tuple_type_t<ID, SimplexDim + 1>& vertices);
+
    SimplexBase(const SimplexBase&) = default;
 
    SimplexBase& operator=(const SimplexBase&) = default;
@@ -49,6 +54,8 @@ public:
    SimplexBase(SimplexBase&&) noexcept = default;
 
    SimplexBase& operator=(SimplexBase&&) noexcept = default;
+
+   uint getTopologyDimension() const noexcept override;
 
    ID getID() const noexcept override;
 
@@ -61,6 +68,8 @@ public:
    Eigen::VectorXd getPoint(std::size_t idx) const override;
 
    Eigen::MatrixXd getPoints() const override;
+
+   util::generate_tuple_type_t<ID, SimplexDim + 1> getVertices() const;
 
 private:
    ID id;

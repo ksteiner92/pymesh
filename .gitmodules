@@ -1,0 +1,6 @@
+[submodule "cpp/mesh/tetgen"]
+	path = cpp/mesh/tetgen
+	url = https://github.com/libigl/tetgen.git
+[submodule "cpp/mesh/triangle"]
+	path = cpp/mesh/triangle
+	url = https://github.com/libigl/triangle.git
