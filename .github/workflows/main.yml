@@ -21,6 +21,15 @@ jobs:
     steps:
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
     - uses: actions/checkout@v2
+      
+    - name: Install Dependencies
+      run: |
+          sudo apt-get -y -qq update
+          sudo apt-get -y -qq --no-install-recommends install \
+            cmake \
+            extra-cmake-modules \
+            libeigen3-dev \
+            python-pybind11
 
     # Runs a single command using the runners shell
     - name: build
