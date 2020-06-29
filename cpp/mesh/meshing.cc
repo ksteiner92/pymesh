@@ -15,7 +15,8 @@ namespace mesh
 {
 
 template<>
-unique_ptr<System<2, 2>> System<2, 2>::Factory::create(double area)
+//unique_ptr<System<2, 2>> System<2, 2>::Factory::create(double area)
+System<2, 2>* System<2, 2>::Factory::create(double area)
 {
    // Setup triangle input
    vector<double> pointlist = system_input_mesh->getPointList();
@@ -30,13 +31,6 @@ unique_ptr<System<2, 2>> System<2, 2>::Factory::create(double area)
       }
    }
    const size_t nedges_in = edges.size() / 2;
-   /*const size_t nedges_in = system_input_mesh->edges().size();
-
-   edges.reserve(nedges_in * 2);
-   for (const auto& edge : system_input_mesh->edges()) {
-      edges.push_back(edge[0]);
-      edges.push_back(edge[1]);
-   }*/
    const int startbndid = 2;
 
    triangulateio triin{};
@@ -52,54 +46,21 @@ unique_ptr<System<2, 2>> System<2, 2>::Factory::create(double area)
    triangulateio triout{};
    triangulateio vout{};
 
-   // mesh
    stringstream ss;
    ss << "pecnzqvDV";
    if (area > 0.0)
       ss << 'a' << area;
    triangulate((char*) ss.str().c_str(), &triin, &triout, &vout);
+   std::cout.flush();
 
-   Mesh<2, 2>* mesh_out = system->mesh();
+   //auto result_system = std::make_unique<System<2, 2>>();
+   System<2, 2>* result_system = new System<2, 2>();
+   for (const auto& seg : system->segments)
+      result_system->getOrCreateSegment(seg->name);
 
+   Mesh<2, 2>* mesh_out = result_system->mesh();
 
-/*
-   // Create a mapping from vertex to boundary by iterating over all the triangle segments.
-   // Additionally, store all vertices into their corresponding boundary classes, if it is not
-   // an interior vertex (boundary class 0).
-
-   // Coontains the edges for each boundary
-   vector<vector<int>> bnd_edges(nedges_in);
-   // Contains the vertices for each boundary
    vector<unordered_set<int>> bndvids(nedges_in);
-   // Contains for each boundary the corner vertices
-   vector<unordered_set<int>> bnd_corners(nedges_in);
-   // Contains for each vertex, the vertex id (first) and the boundaries
-   // the vertex is part of.
-   vector<tuple<int, vector<int>>> vid2bndid(triout.numberofpoints);
-
-   for (size_t ibnd = 0; ibnd < triout.numberofsegments; ++ibnd) {
-      const int bndid = triout.segmentmarkerlist[ibnd] - startbndid;
-      for (size_t iv = 0; iv < 2; ++iv) {
-         const int vid = triout.segmentlist[2 * ibnd + iv];
-         get<0>(vid2bndid[vid]) = vid;
-         get<1>(vid2bndid[vid]).push_back(bndid);
-         // Not an interior vertex
-         if (bndid >= 0) {
-            bndvids[bndid].insert(vid);
-            bnd_edges[bndid].push_back(vid);
-            // If the vertex exists in bnd_corners it must be an
-            // interior vertex. Only corners appear once.
-            const auto it = bnd_corners[bndid].find(vid);
-            if (it != bnd_corners[bndid].end())
-               bnd_corners[bndid].erase(vid);
-            else
-               bnd_corners[bndid].insert(vid);
-         }
-      }
-   }
-*/
-
-   vector<unordered_set<int>> bnd_vertices(nedges_in);
    vector<vector<int>> bnd_edges(nedges_in);
    vector<int> edge2bnd(nedges_in);
    const double* pntlst = triout.pointlist;
@@ -107,22 +68,22 @@ unique_ptr<System<2, 2>> System<2, 2>::Factory::create(double area)
       // Create a mapping from vertex to boundary by iterating over all the triangle segments.
       // Additionally, store all vertices into their corresponding boundary classes, if it is not
       // an interior vertex (boundary class 0).
-      vector <unordered_set<int>> bnd_corners(nedges_in);
-      vector < tuple < int, vector < int >> > node2bnd_tmp(triout.numberofpoints);
-      for (size_t sidx = 0; sidx < triout.numberofsegments; ++sidx) {
-         const int sid = triout.segmentmarkerlist[sidx] - startbndid;
-         for (size_t i = 0; i < 2; ++i) {
-            const int eid = triout.segmentlist[2 * sidx + i];
-            if (sid >= 0) {
-               get<0>(node2bnd_tmp[eid]) = eid;
-               get<1>(node2bnd_tmp[eid]).push_back(sid);
-               bnd_vertices[sid].insert(eid);
-               bnd_edges[sid].push_back(eid);
-               const auto it = bnd_corners[sid].find(eid);
-               if (it != bnd_corners[sid].end())
-                  bnd_corners[sid].erase(eid);
+      vector<unordered_set<int>> bnd_corners(nedges_in);
+      vector<tuple<int, vector<int>>> vid2bndid(triout.numberofpoints);
+      for (size_t ibnd = 0; ibnd < triout.numberofsegments; ++ibnd) {
+         const int bndid = triout.segmentmarkerlist[ibnd] - startbndid;
+         for (size_t iv = 0; iv < 2; ++iv) {
+            const int eid = triout.segmentlist[2 * ibnd + iv];
+            if (bndid >= 0) {
+               get<0>(vid2bndid[eid]) = eid;
+               get<1>(vid2bndid[eid]).push_back(bndid);
+               bndvids[bndid].insert(eid);
+               bnd_edges[bndid].push_back(eid);
+               const auto it = bnd_corners[bndid].find(eid);
+               if (it != bnd_corners[bndid].end())
+                  bnd_corners[bndid].erase(eid);
                else
-                  bnd_corners[sid].insert(eid);
+                  bnd_corners[bndid].insert(eid);
             }
          }
       }
@@ -161,7 +122,7 @@ unique_ptr<System<2, 2>> System<2, 2>::Factory::create(double area)
       // Remove all vertices from the node to boundary mapping, where there are less than two boundaries
       // (a interior boundary vertex) and if contains only the same boundary class. The remaining vertices are then
       // nodes of the boundaries.
-      auto end_it = remove_if(node2bnd_tmp.begin(), node2bnd_tmp.end(), [](const tuple<int, vector<int>>& in) {
+      auto end_it = remove_if(vid2bndid.begin(), vid2bndid.end(), [](const tuple<int, vector<int>>& in) {
          const vector<int>& a = get<1>(in);
          if (a.size() < 2)
             return true;
@@ -171,11 +132,11 @@ unique_ptr<System<2, 2>> System<2, 2>::Factory::create(double area)
                return false;
          return true;
       });
-      node2bnd_tmp.resize(distance(node2bnd_tmp.begin(), end_it));
+      vid2bndid.resize(distance(vid2bndid.begin(), end_it));
 
       // Generate the reverse mapping from boundary to their nodes with other boundaries.
       vector <vector<int>> bnd2node(nedges_in);
-      for (const tuple<int, vector<int>>& bnds : node2bnd_tmp) {
+      for (const tuple<int, vector<int>>& bnds : vid2bndid) {
          const int vid = get<0>(bnds);
          for (const int bnd : get<1>(bnds)) {
             if (find(bnd2node[bnd].begin(), bnd2node[bnd].end(), vid) == bnd2node[bnd].end())
@@ -219,7 +180,7 @@ unique_ptr<System<2, 2>> System<2, 2>::Factory::create(double area)
                ++end;
                for (auto it = start; it != end; ++it) {
                   bnd_edges[ibnd].push_back(*it);
-                  bnd_vertices[ibnd].insert(*it);
+                  bndvids[ibnd].insert(*it);
                }
                break;
             }
@@ -227,7 +188,7 @@ unique_ptr<System<2, 2>> System<2, 2>::Factory::create(double area)
       }
    }
 
-   Mesh<2, 2>* voronoi = system->_voronoi.get();
+   Mesh<2, 2>* voronoi = result_system->_voronoi.get();
    voronoi->coordinates->clear();
    voronoi->coordinates->reserve(vout.numberofpoints * 2);
    copy(vout.pointlist, vout.pointlist + vout.numberofpoints * 2, back_inserter(*voronoi->coordinates));
@@ -269,10 +230,10 @@ unique_ptr<System<2, 2>> System<2, 2>::Factory::create(double area)
       for (size_t iseg = 0; iseg < nsegs; ++iseg) {
          bool on_boundary = false;
          for (const auto& edge : segment_input_meshes[iseg]->edges())
-            if ((on_boundary = bnd_vertices[edge.getID()].find(vid) != bnd_vertices[edge.getID()].end()))
+            if ((on_boundary = bndvids[edge.getID()].find(vid) != bndvids[edge.getID()].end()))
                break;
          if (on_boundary || segment_polygons[iseg].isInside(element.center()))
-            system->segments[iseg]->mesh()->vertices_container.reference(vid);
+            result_system->segments[iseg]->mesh()->vertices_container.reference(vid);
       }
    }
 
@@ -283,11 +244,11 @@ unique_ptr<System<2, 2>> System<2, 2>::Factory::create(double area)
       for (size_t iseg = 0; iseg < nsegs; ++iseg) {
          bool on_boundary = false;
          for (const auto& edge : segment_input_meshes[iseg]->edges())
-            if ((on_boundary = (bnd_vertices[edge.getID()].find(element[0]) != bnd_vertices[edge.getID()].end() &&
-                                bnd_vertices[edge.getID()].find(element[1]) != bnd_vertices[edge.getID()].end())))
+            if ((on_boundary = (bndvids[edge.getID()].find(element[0]) != bndvids[edge.getID()].end() &&
+                                bndvids[edge.getID()].find(element[1]) != bndvids[edge.getID()].end())))
                break;
          if (on_boundary || segment_polygons[iseg].isInside(element.center()))
-            system->segments[iseg]->mesh()->edges_container.reference(eid);
+            result_system->segments[iseg]->mesh()->edges_container.reference(eid);
       }
    }
 
@@ -299,12 +260,12 @@ unique_ptr<System<2, 2>> System<2, 2>::Factory::create(double area)
                                                                      triout.trianglelist[3 * fid + 2]);
       for (size_t iseg = 0; iseg < nsegs; ++iseg)
          if (segment_polygons[iseg].isInside(element.center()))
-            system->segments[iseg]->mesh()->faces_container.reference(fid);
+            result_system->segments[iseg]->mesh()->faces_container.reference(fid);
    }
 
    // Create the interface segments
    for (size_t iseg = 0; iseg < nsegs; ++iseg) {
-      const ID iseg_id = system->segments[iseg]->getID();
+      const ID iseg_id = result_system->segments[iseg]->getID();
       Mesh<2, 1>* seg1_mesh = segment_input_meshes[iseg].get();
       for (auto& edge1 : seg1_mesh->edges()) {
          const auto begin1 = bnd_edges[edge1.getID()].begin();
@@ -312,9 +273,9 @@ unique_ptr<System<2, 2>> System<2, 2>::Factory::create(double area)
          const int a1 = bnd_edges[edge1.getID()].front();
          const int b1 = bnd_edges[edge1.getID()].back();
          for (size_t jseg = iseg + 1; jseg < nsegs; ++jseg) {
-            const ID jseg_id = system->segments[jseg]->getID();
+            const ID jseg_id = result_system->segments[jseg]->getID();
             Mesh<2, 1>* seg2_mesh = segment_input_meshes[jseg].get();
-            Boundary<2, 2>* int_mesh = system->interface(iseg_id, jseg_id)->mesh();
+            Boundary<2, 2>* int_mesh = result_system->interface(iseg_id, jseg_id)->mesh();
             for (auto& edge2 : seg2_mesh->edges()) {
                const auto begin2 = bnd_edges[edge2.getID()].begin();
                const int a2 = *begin2;
@@ -344,7 +305,7 @@ unique_ptr<System<2, 2>> System<2, 2>::Factory::create(double area)
          }
       }
    }
-   return move(system);
+   return result_system;
 }
 
 }

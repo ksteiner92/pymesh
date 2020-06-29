@@ -25,6 +25,19 @@ System<Dim, TopDim>::System()
 }
 
 template<uint Dim, uint TopDim>
+System<Dim, TopDim>& System<Dim, TopDim>::operator=(System&& sys) noexcept
+{
+   segment_names = move(sys.segment_names);
+   segments = move(sys.segments);
+   inthash2idx = move(sys.inthash2idx);
+   interfaces = move(sys.interfaces);
+   _mesh = move(sys._mesh);
+   _voronoi = move(sys._voronoi);
+   attributes = move(sys.attributes);
+   return *this;
+}
+
+template<uint Dim, uint TopDim>
 MeshBase* System<Dim, TopDim>::mesh() const
 {
    return _mesh.get();
@@ -150,7 +163,8 @@ Mesh<Dim, TopDim - 1>* System<Dim, TopDim>::Factory::segment(const std::string& 
 }
 
 template<uint Dim, uint TopDim>
-unique_ptr<System<Dim, TopDim>> System<Dim, TopDim>::Factory::create(double area)
+//unique_ptr<System<Dim, TopDim>> System<Dim, TopDim>::Factory::create(double area)
+System<Dim, TopDim>* System<Dim, TopDim>::Factory::create(double area)
 {
    throw runtime_error("Not yet implemented");
 }

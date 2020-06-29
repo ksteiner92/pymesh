@@ -1,15 +1,15 @@
-add_library(mesh SHARED mesh.cc segment.cc elements.cc system.cc meshing.cc ../io/logger.cc)
+add_library(Mesh SHARED mesh.cc segment.cc elements.cc system.cc meshing.cc)
+add_library(Mesh::Mesh ALIAS Mesh)
+
+target_compile_features(Mesh PRIVATE cxx_std_17)
 
 find_package(Eigen3 REQUIRED)
-
-target_compile_features(mesh PRIVATE cxx_std_17)
 
 add_subdirectory(tetgen)
 add_subdirectory(triangle)
 
-add_library(Mesh::mesh ALIAS mesh)
 
-target_include_directories(mesh
+target_include_directories(Mesh
         PUBLIC
         $<INSTALL_INTERFACE:include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -36,7 +36,7 @@ target_link_libraries(mesh PRIVATE tetgen triangle)
 include(GNUInstallDirs)
 
 # 'make install' to the correct locations (provided by GNUInstallDirs).
-install(TARGETS mesh
+install(TARGETS Mesh
         EXPORT MeshConfig
         ARCHIVE  DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY  DESTINATION ${CMAKE_INSTALL_LIBDIR}

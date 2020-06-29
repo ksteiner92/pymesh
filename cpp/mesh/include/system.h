@@ -20,22 +20,6 @@ class Segment;
 template<uint Dim, uint TopDim>
 class Interface;
 
-/*class MeshBase;
-
-class AttributeBase;
-
-template<typename T>
-class Attribute;
-
-template<uint Dim, uint TopDim>
-class Mesh;
-
-template<uint Dim, uint TopDim>
-class Segment;
-
-template<uint Dim, uint TopDim>
-class Interface;*/
-
 class SystemBase
 {
 public:
@@ -65,7 +49,7 @@ public:
 
    System(const System&) = delete;
 
-   System& operator=(System&&) noexcept = default;
+   System& operator=(System&&) noexcept;
 
    System& operator=(System&) = delete;
 
@@ -108,7 +92,9 @@ public:
 
       Mesh<Dim, TopDim - 1>* mesh();
 
-      std::unique_ptr<System<Dim, TopDim>> create(double area=0.0);
+      //std::unique_ptr<System<Dim, TopDim>> create(double area=0.0);
+
+      System<Dim, TopDim>* create(double area=0.0);
 
    private:
       std::unique_ptr<System<Dim, TopDim>> system;

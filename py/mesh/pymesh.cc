@@ -18,7 +18,7 @@ PYBIND11_MAKE_OPAQUE(vector<Segment<2, 1>>);
 PYBIND11_MAKE_OPAQUE(vector<Segment<1, 1>>);
 PYBIND11_MAKE_OPAQUE(vector<Segment<3, 1>>);
 PYBIND11_MAKE_OPAQUE(vector<Segment<3, 2>>);
-//PYBIND11_MAKE_OPAQUE(unique_ptr<System<2, 2>>);
+
 
 template<uint Dim>
 static py::class_<Mesh<Dim, 0>, MeshBase> declareMesh0D(py::module &m)
@@ -151,7 +151,7 @@ static void declareSystem(py::module &m)
    cls_systemfactory.def(py::init<>());
    cls_systemfactory.def_property_readonly("mesh", &System<Dim, TopDim>::Factory::mesh, rvp::reference_internal);
    cls_systemfactory.def("segment", &System<Dim, TopDim>::Factory::segment, rvp::reference_internal);
-   cls_systemfactory.def("create", &System<Dim, TopDim>::Factory::create, "area"_a = 0.0, rvp::move);
+   cls_systemfactory.def("create", &System<Dim, TopDim>::Factory::create, "area"_a = 0.0, rvp::take_ownership);
 }
 
 PYBIND11_MODULE(pymesh, m) {
